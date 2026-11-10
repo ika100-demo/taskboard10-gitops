@@ -60,6 +60,7 @@ components:
     instances:
       dev:
         replicas: 2
+      staging: {}
     expose:
       host: taskboard10-api
     uses:
@@ -91,6 +92,7 @@ components:
         memory: 512Mi
     instances:
       dev: {}
+      staging: {}
     expose:
       host: taskboard10-web
 resources:
