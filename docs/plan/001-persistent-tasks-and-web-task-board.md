@@ -3,61 +3,109 @@ plan_id: 001-persistent-tasks-and-web-task-board
 spec: 001-persistent-tasks-and-web-task-board
 feature: Tasks persist in an in-cluster Postgres database and are listed and added on the web board
 gitops_app: ika100-demo/taskboard10-gitops
-status: draft
+status: completed
 repos:
-  - id: taskboard10-gitops
-    shape: gitops-app
-    summary: Declare the system's Postgres database, give it to the task API and point the web board at the API
-    acs: [AC-001.1, AC-001.2, AC-001.3]
-    gitops:
-      - {resource: postgres}
-      - {uses: postgres, component: taskboard10-api}
-      - {env: {TASKS_API_URL: 'http://taskboard10-api'}, component: taskboard10-web}
-    depends_on: []
-    done: false
-  - id: taskboard10-api
-    shape: service-python
-    summary: Store tasks in Postgres so they survive restarts and every instance sees the same list
-    acs: [AC-001.1, AC-001.2, AC-001.7, AC-001.8]
-    criteria:
-      - "Given tasks \"A\" and then \"B\" were created through `POST /tasks`, when the service is stopped and started again (or a new app instance is started) against the same database, then `GET /tasks` returns 200 with \"A\" before \"B\", each with the same `id`, `title` and `due_date` the create responses returned (system AC-001.1)"
-      - "Given a database with no `tasks` table, when the service starts and a client sends `GET /tasks`, then the service has created its table itself and answers 200 with `[]`; the `POST /tasks` 201 body, the title trimming and the 422 answers of spec 001 are unchanged against the database (system AC-001.1)"
-      - "Given two instances of the service run against the same database and a task was just created through `POST /tasks` on one of them, when a client sends `GET /tasks` 10 times alternating between the two instances, then every one of the 10 responses contains that task, and tasks created through either instance are listed in creation order, oldest first (system AC-001.2)"
-      - "Given the database is unreachable (stopped, wrong host, or `DATABASE_URL` unset), when a client sends `GET /tasks` or a valid `POST /tasks`, then the service answers 503 with the body `{\"detail\": \"Task store is unavailable\"}` within 3 seconds, no task is stored, and `/health` and `/ready` still answer 200 (system AC-001.7, AC-001.8)"
-      - "Given the database was unreachable and the service answered 503, when the database becomes reachable again, then the next `GET /tasks` and `POST /tasks` answer 200 and 201 without a restart of the service (system AC-001.7)"
-    arguments: |
-      Replace the in-memory TaskStore behind get_task_store (design of spec 001) with a Postgres store; keep the
-      in-memory class only as a unit-test double. Connection from DATABASE_URL (the platform also sets PG*);
-      psycopg 3 with a small pool. Table `tasks`: `seq bigserial primary key`, `id text unique not null` (uuid4 string,
-      as today), `title text not null`, `due_date date null`; list ORDER BY seq. Create the table on first successful
-      connection with CREATE TABLE IF NOT EXISTS inside a transaction holding pg_advisory_xact_lock, because two replicas
-      start at once. The service must start and stay ready while the database is down (503 on /tasks, never a crash
-      loop). Acceptance tests need a real Postgres: add `postgresql` to devbox.json (or testcontainers) and a devbox
-      recipe for it; CI needs the same. Existing smoke tests keep working once dev has the database.
-    depends_on: [taskboard10-gitops]
-    done: false
-  - id: taskboard10-web
-    shape: web-nextjs
-    summary: Task board start page that lists tasks and adds a task through the task API
-    acs: [AC-001.1, AC-001.3, AC-001.4, AC-001.5, AC-001.6, AC-001.7, AC-001.8]
-    criteria:
-      - "Given `GET /tasks` of the task API returns tasks, when a person opens the start page `/`, then it lists every task in the order the API returned (oldest first), each showing its `title` and its `due_date` exactly as `YYYY-MM-DD`, or the text \"No due date\" when `due_date` is null; the page asks the API on every load (no cached list), so tasks that exist after an API restart or were created elsewhere appear on the next load (system AC-001.1, AC-001.3)"
-      - "Given `GET /tasks` returns `[]`, when a person opens the start page, then it shows the text \"No tasks yet\" and the add form with a title field, a date field and a submit button (system AC-001.4)"
-      - "Given the board is open, when a person enters the title \"Buy milk\", picks the due date 2026-12-01 (or leaves the date empty) and submits, then `POST /tasks` reaches the task API with `{\"title\": \"Buy milk\", \"due_date\": \"2026-12-01\"}` (or `\"due_date\": null`), the task the API returned appears at the end of the list without a page reload, \"No tasks yet\" is gone, and both form fields are empty (system AC-001.5)"
-      - "Given the board is open, when a person submits an empty or whitespace-only title, then \"Enter a title\" is shown next to the title field; when the title is longer than 200 characters after trimming, then \"Title must be at most 200 characters\" is shown there; in both cases the entered title and date stay in the form and no request reaches `POST /tasks` (system AC-001.6)"
-      - "Given `GET /tasks` answers 503, any status other than 200, a body that is not a JSON array of tasks, or no answer within 5 seconds, when a person opens the start page, then it shows \"Tasks could not be loaded. Try again later.\" instead of the list and instead of \"No tasks yet\" (system AC-001.7)"
-      - "Given `POST /tasks` answers 503, any status other than 201 and 422, or no answer within 5 seconds, when a person submits a valid task, then the board shows \"Task could not be saved. Try again.\", the entered title and due date stay in the form, and the list is unchanged (system AC-001.8)"
-    arguments: |
-      The page fetches the API on the server only: TASKS_API_URL (server-side env, no NEXT_PUBLIC_, default
-      http://localhost:8080 for local dev); the browser never calls the task API directly, so no CORS. Render `/`
-      dynamically (no static generation, `cache: "no-store"`). The add form is a client component posting to the web
-      app's own route handler `POST /api/tasks` (see Contract), which forwards to the API. Show due_date as the string
-      the API returned; never parse it into a Date (time zones shift the day). Replace the template's landing content
-      on `/`; keep /api/health, /api/ready and /api/metrics. Document TASKS_API_URL in docs/env-vars.md. Keep a
-      read-only smoke test (the board loads and shows a list, "No tasks yet" or the load error) and a @writes one
-      that adds a `smoke-<uuid>` task in dev.
-    depends_on: []
-    done: false
+- id: taskboard10-gitops
+  shape: gitops-app
+  summary: Declare the system's Postgres database, give it to the task API and point the web board at
+    the API
+  acs:
+  - AC-001.1
+  - AC-001.2
+  - AC-001.3
+  gitops:
+  - resource: postgres
+  - uses: postgres
+    component: taskboard10-api
+  - env:
+      TASKS_API_URL: http://taskboard10-api
+    component: taskboard10-web
+  depends_on: []
+  done: true
+- id: taskboard10-api
+  shape: service-python
+  summary: Store tasks in Postgres so they survive restarts and every instance sees the same list
+  acs:
+  - AC-001.1
+  - AC-001.2
+  - AC-001.7
+  - AC-001.8
+  criteria:
+  - Given tasks "A" and then "B" were created through `POST /tasks`, when the service is stopped and started
+    again (or a new app instance is started) against the same database, then `GET /tasks` returns 200
+    with "A" before "B", each with the same `id`, `title` and `due_date` the create responses returned
+    (system AC-001.1)
+  - Given a database with no `tasks` table, when the service starts and a client sends `GET /tasks`, then
+    the service has created its table itself and answers 200 with `[]`; the `POST /tasks` 201 body, the
+    title trimming and the 422 answers of spec 001 are unchanged against the database (system AC-001.1)
+  - Given two instances of the service run against the same database and a task was just created through
+    `POST /tasks` on one of them, when a client sends `GET /tasks` 10 times alternating between the two
+    instances, then every one of the 10 responses contains that task, and tasks created through either
+    instance are listed in creation order, oldest first (system AC-001.2)
+  - 'Given the database is unreachable (stopped, wrong host, or `DATABASE_URL` unset), when a client sends
+    `GET /tasks` or a valid `POST /tasks`, then the service answers 503 with the body `{"detail": "Task
+    store is unavailable"}` within 3 seconds, no task is stored, and `/health` and `/ready` still answer
+    200 (system AC-001.7, AC-001.8)'
+  - Given the database was unreachable and the service answered 503, when the database becomes reachable
+    again, then the next `GET /tasks` and `POST /tasks` answer 200 and 201 without a restart of the service
+    (system AC-001.7)
+  arguments: |
+    Replace the in-memory TaskStore behind get_task_store (design of spec 001) with a Postgres store; keep the
+    in-memory class only as a unit-test double. Connection from DATABASE_URL (the platform also sets PG*);
+    psycopg 3 with a small pool. Table `tasks`: `seq bigserial primary key`, `id text unique not null` (uuid4 string,
+    as today), `title text not null`, `due_date date null`; list ORDER BY seq. Create the table on first successful
+    connection with CREATE TABLE IF NOT EXISTS inside a transaction holding pg_advisory_xact_lock, because two replicas
+    start at once. The service must start and stay ready while the database is down (503 on /tasks, never a crash
+    loop). Acceptance tests need a real Postgres: add `postgresql` to devbox.json (or testcontainers) and a devbox
+    recipe for it; CI needs the same. Existing smoke tests keep working once dev has the database.
+  depends_on:
+  - taskboard10-gitops
+  done: true
+- id: taskboard10-web
+  shape: web-nextjs
+  summary: Task board start page that lists tasks and adds a task through the task API
+  acs:
+  - AC-001.1
+  - AC-001.3
+  - AC-001.4
+  - AC-001.5
+  - AC-001.6
+  - AC-001.7
+  - AC-001.8
+  criteria:
+  - Given `GET /tasks` of the task API returns tasks, when a person opens the start page `/`, then it
+    lists every task in the order the API returned (oldest first), each showing its `title` and its `due_date`
+    exactly as `YYYY-MM-DD`, or the text "No due date" when `due_date` is null; the page asks the API
+    on every load (no cached list), so tasks that exist after an API restart or were created elsewhere
+    appear on the next load (system AC-001.1, AC-001.3)
+  - Given `GET /tasks` returns `[]`, when a person opens the start page, then it shows the text "No tasks
+    yet" and the add form with a title field, a date field and a submit button (system AC-001.4)
+  - 'Given the board is open, when a person enters the title "Buy milk", picks the due date 2026-12-01
+    (or leaves the date empty) and submits, then `POST /tasks` reaches the task API with `{"title": "Buy
+    milk", "due_date": "2026-12-01"}` (or `"due_date": null`), the task the API returned appears at the
+    end of the list without a page reload, "No tasks yet" is gone, and both form fields are empty (system
+    AC-001.5)'
+  - Given the board is open, when a person submits an empty or whitespace-only title, then "Enter a title"
+    is shown next to the title field; when the title is longer than 200 characters after trimming, then
+    "Title must be at most 200 characters" is shown there; in both cases the entered title and date stay
+    in the form and no request reaches `POST /tasks` (system AC-001.6)
+  - Given `GET /tasks` answers 503, any status other than 200, a body that is not a JSON array of tasks,
+    or no answer within 5 seconds, when a person opens the start page, then it shows "Tasks could not
+    be loaded. Try again later." instead of the list and instead of "No tasks yet" (system AC-001.7)
+  - Given `POST /tasks` answers 503, any status other than 201 and 422, or no answer within 5 seconds,
+    when a person submits a valid task, then the board shows "Task could not be saved. Try again.", the
+    entered title and due date stay in the form, and the list is unchanged (system AC-001.8)
+  arguments: |
+    The page fetches the API on the server only: TASKS_API_URL (server-side env, no NEXT_PUBLIC_, default
+    http://localhost:8080 for local dev); the browser never calls the task API directly, so no CORS. Render `/`
+    dynamically (no static generation, `cache: "no-store"`). The add form is a client component posting to the web
+    app's own route handler `POST /api/tasks` (see Contract), which forwards to the API. Show due_date as the string
+    the API returned; never parse it into a Date (time zones shift the day). Replace the template's landing content
+    on `/`; keep /api/health, /api/ready and /api/metrics. Document TASKS_API_URL in docs/env-vars.md. Keep a
+    read-only smoke test (the board loads and shows a list, "No tasks yet" or the load error) and a @writes one
+    that adds a `smoke-<uuid>` task in dev.
+  depends_on: []
+  done: true
 gitops_pin: []
 ---
 
