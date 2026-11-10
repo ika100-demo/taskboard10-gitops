@@ -1,7 +1,7 @@
 ---
 spec_id: 001-persistent-tasks-and-web-task-board
 title: Persistent tasks and web task board
-status: approved
+status: done
 priority: P1
 shape: gitops-app
 ---
@@ -62,3 +62,5 @@ As a person using the task board, I want to add a task with a title and, if I li
 - 2026-11-10 created
 - 2026-11-10 amended: open question on sign-in answered (none in this spec, anyone who reaches the board may see and add tasks), recorded under Non-goals; criteria unchanged
 - 2026-11-10 approved
+- 2026-11-10 building
+- 2026-11-10 done
