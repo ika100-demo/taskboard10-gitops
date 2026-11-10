@@ -52,7 +52,8 @@ components:
         cpu: 500m
         memory: 512Mi
     instances:
-      dev: {}
+      dev:
+        replicas: 2
     expose:
       host: taskboard10-api
     uses:
