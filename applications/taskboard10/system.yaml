@@ -61,6 +61,7 @@ components:
       dev:
         replicas: 2
       staging: {}
+      prod: {}
     expose:
       host: taskboard10-api
     uses:
@@ -93,6 +94,7 @@ components:
     instances:
       dev: {}
       staging: {}
+      prod: {}
     expose:
       host: taskboard10-web
 resources:
